@@ -1,5 +1,17 @@
 package main
 
+import "time"
+
+type Model struct {
+	Name            string
+	InputTokenCost  float64
+	OutputTokenCost float64
+}
+
+type OpenAIClient struct {
+	ApiKey string
+}
+
 type ResponseRequest struct {
 	Model      string `json:"model"`
 	PreviousID string `json:"previous_response_id,omitempty"`
@@ -29,5 +41,10 @@ type ResponseBody struct {
 }
 
 type ConversationState struct {
-	PreviousID string
+	PreviousID        string
+	InputTokens       int
+	OutputTokens      int
+	TotalInputTokens  int
+	TotalOutputTokens int
+	Elapsed           time.Duration
 }

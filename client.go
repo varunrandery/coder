@@ -8,12 +8,8 @@ import (
 	"net/http"
 )
 
-type OpenAIClient struct {
-	apiKey string
-}
-
 func NewOpenAIClient(apiKey string) *OpenAIClient {
-	return &OpenAIClient{apiKey: apiKey}
+	return &OpenAIClient{ApiKey: apiKey}
 }
 
 func (c *OpenAIClient) CreateResponse(req ResponseRequest) (ResponseBody, error) {
@@ -30,7 +26,7 @@ func (c *OpenAIClient) CreateResponse(req ResponseRequest) (ResponseBody, error)
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+	httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.ApiKey))
 
 	httpResp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
