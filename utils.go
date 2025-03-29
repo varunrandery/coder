@@ -44,19 +44,17 @@ func handleSlashCommand(input *string, cs *ConversationState, selectedModel *Mod
 
 	case "/session":
 		fmt.Printf("Session token consumption: [in: %v; out: %v], [in: $%.2f; out: $%.2f]\n", cs.TotalInputTokens, cs.TotalOutputTokens, float64(cs.TotalInputTokens)*selectedModel.InputTokenCost, float64(cs.TotalOutputTokens)*selectedModel.OutputTokenCost)
-		cs.Elapsed = time.Duration(0)
 		return true
 
 	case "/help":
 		fmt.Println("Usage:")
 		fmt.Println("- Type your message and press Enter to get a response.")
-		fmt.Println("- Type \"/new\" to start a new conversation.")
-		fmt.Println("- Type \"/include <file-path> <prompt>\" to include a file in context.")
-		fmt.Println("- Type \"/session\" to view current-conversation token consumption.")
-		fmt.Println("- Type \"/exit\" to exit the program.")
-		fmt.Println("- Type \"/model info\" to view the current model.")
-		fmt.Println("- Type \"/model switch\" to change the current model.")
-		cs.Elapsed = time.Duration(0)
+		fmt.Println("- \"/new\": start a new conversation.")
+		fmt.Println("- \"/include <file-path> <prompt>\": include a file in context.")
+		fmt.Println("- \"/session\": view current-conversation token consumption.")
+		fmt.Println("- \"/model info\": to view current model info.")
+		fmt.Println("- \"/model switch <model-name>\" to change the current model.")
+		fmt.Println("- \"/exit\": exit the program.")
 		return true
 
 	case "/include":

@@ -30,7 +30,17 @@ Trying to build a basic code analysis CLI (to learn Go along the way).
 
 ## Usage
 
-Basic slash commands are supported; attach files using `\attach <file-path>` to include the file in the next prompt. Use `\new` to start a new conversation and `\exit` to cleanly exit.
+Output of `/help`:
+```
+Usage:
+- Type your message and press Enter to get a response.
+- "/new": start a new conversation.
+- "/include <file-path> <prompt>": include a file in context.
+- "/session": view current-conversation token consumption.
+- "/model info": to view current model info.
+- "/model switch <model-name>" to change the current model.
+- "/exit": exit the program.
+```
 
 ## License
 
