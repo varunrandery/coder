@@ -9,7 +9,7 @@ import (
 )
 
 func NewOpenAIClient(apiKey string) *OpenAIClient {
-	return &OpenAIClient{ApiKey: apiKey}
+	return &OpenAIClient{APIKey: apiKey}
 }
 
 func (c *OpenAIClient) CreateResponse(req ResponseRequest) (ResponseBody, error) {
@@ -26,7 +26,7 @@ func (c *OpenAIClient) CreateResponse(req ResponseRequest) (ResponseBody, error)
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.ApiKey))
+	httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.APIKey))
 
 	httpResp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
@@ -34,15 +34,39 @@ func (c *OpenAIClient) CreateResponse(req ResponseRequest) (ResponseBody, error)
 	}
 	defer httpResp.Body.Close()
 
-	respBody, err := io.ReadAll(httpResp.Body)
+	var respBody []byte
+	respBody, err = io.ReadAll(httpResp.Body)
 	if err != nil {
 		return resp, err
 	}
 
-	err = json.Unmarshal(respBody, &resp)
-	if err != nil {
-		return resp, err
-	}
+	// for debugging
+	// fmt.Printf("%s", respBody)
+	// fmt.Printf("Status Code: %d\n", httpResp.StatusCode)
 
-	return resp, nil
+	switch httpResp.StatusCode {
+	case http.StatusBadRequest:
+		var errorResponse map[string]string
+		err = json.Unmarshal(respBody, &errorResponse)
+		if err != nil {
+			return resp, fmt.Errorf("failed to unmarshal 400 error response: %v", err)
+		}
+		return resp, fmt.Errorf("400 Bad Request: %v", errorResponse["error"])
+	case http.StatusOK:
+		var incompleteResponse map[string]interface{}
+		err = json.Unmarshal(respBody, &incompleteResponse)
+		if err != nil {
+			return resp, err
+		}
+		if status, ok := incompleteResponse["status"].(string); ok && status == "incomplete" {
+			return resp, fmt.Errorf("incomplete response: %v", incompleteResponse["incomplete_details"])
+		}
+		err = json.Unmarshal(respBody, &resp)
+		if err != nil {
+			return resp, err
+		}
+		return resp, nil
+	default:
+		return resp, fmt.Errorf("non-OK response code: %d", httpResp.StatusCode)
+	}
 }

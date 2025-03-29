@@ -9,7 +9,7 @@ type Model struct {
 }
 
 type OpenAIClient struct {
-	ApiKey string
+	APIKey string
 }
 
 type ResponseRequest struct {

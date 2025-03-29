@@ -1,13 +1,16 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"log"
 	"os"
 	"strings"
 	"time"
 
+	"os/signal"
+	"syscall"
+
+	"github.com/chzyer/readline"
 	"github.com/joho/godotenv"
 )
 
@@ -23,102 +26,119 @@ func main() {
 	}
 
 	fmt.Print("\033[H\033[2J")
-	fmt.Println("Coder v0.0.1")
+	fmt.Println("Coder v0.0.2")
 	fmt.Println("\nType \"/help\" for usage instructions.")
 
 	client := NewOpenAIClient(apiKey)
 
-	defaultModel := Model{
-		Name:            "gpt-4o-mini",
-		InputTokenCost:  0.15 / 1000000,
-		OutputTokenCost: 0.60 / 1000000,
+	validModels := map[string]Model{
+		"gpt-4o-mini": {
+			Name:            "gpt-4o-mini",
+			InputTokenCost:  0.15 / 1000000,
+			OutputTokenCost: 0.60 / 1000000,
+		},
+		"gpt-4o": {
+			Name:            "gpt-4o",
+			InputTokenCost:  2.50 / 1000000,
+			OutputTokenCost: 10.0 / 1000000,
+		},
+		"o3-mini": {
+			Name:            "o3-mini",
+			InputTokenCost:  1.10 / 1000000,
+			OutputTokenCost: 4.40 / 1000000,
+		},
 	}
 
-	conversationState := &ConversationState{}
+	selectedModel := validModels["gpt-4o-mini"]
+	cs := &ConversationState{}
+
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+
+	rl, err := readline.NewEx(&readline.Config{
+		Prompt:      "> ",
+		HistoryFile: "/tmp/coder_history",
+	})
+	if err != nil {
+		log.Fatalf("Error creating readline: %v", err)
+	}
+	defer rl.Close()
+
+	go func() {
+		<-signalChan
+		rl.Close()
+		os.Exit(0)
+	}()
 
 	for {
 		responseRequest := ResponseRequest{
-			Model: defaultModel.Name,
-			// MaxTokens: 100,
-			PreviousID: conversationState.PreviousID,
+			Model: selectedModel.Name,
+			/* MaxTokens: func() *int {
+				i := 100
+				return &i
+			}(), */
+			PreviousID: cs.PreviousID,
 		}
 
-		reader := bufio.NewReader(os.Stdin)
-
-		if conversationState.Elapsed > time.Duration(0) {
-			statusStr := fmt.Sprintf("[%v; %v ->; -> %v]", conversationState.Elapsed.Round(time.Millisecond), conversationState.InputTokens, conversationState.OutputTokens)
-			fmt.Printf("\n%s > ", statusStr)
+		if cs.Elapsed > time.Duration(0) {
+			statusStr := fmt.Sprintf("[%v; %v ->; -> %v]", cs.Elapsed.Round(time.Millisecond), cs.InputTokens, cs.OutputTokens)
+			fmt.Printf("\n%s\n", statusStr)
 		} else {
-			fmt.Print("\n> ")
+			fmt.Print("\n")
 		}
 
-		input, err := reader.ReadString('\n')
+		input, err := rl.Readline()
 		if err != nil {
+			if err = readline.ErrInterrupt; err != nil {
+				os.Exit(0)
+			}
 			log.Fatalf("Error reading input: %v", err)
 		}
 
 		input = strings.TrimSpace(input)
 
-		if strings.EqualFold(input, "/exit") {
-			break
-		}
-
-		if strings.EqualFold(input, "/new") {
-			conversationState.clearState()
-			continue
-		}
-
-		if strings.EqualFold(input, "/session") {
-			fmt.Printf("\nSession token consumption: [in: %v; out: %v], [in: $%v; out: $%v]", conversationState.InputTokens, conversationState.OutputTokens, float64(conversationState.TotalInputTokens)*defaultModel.InputTokenCost, float64(conversationState.TotalOutputTokens)*defaultModel.OutputTokenCost)
-
-			conversationState.Elapsed = time.Duration(0)
-			continue
-		}
-
-		if strings.EqualFold(input, "/help") {
-			fmt.Println("\nUsage:")
-			fmt.Println("- Type your message and press Enter to get a response.")
-			fmt.Println("- Type \"/new\" to start a new conversation.")
-			fmt.Println("- Type \"/include <file-path> <prompt>\" to include a file in context.")
-			fmt.Println("- Type \"/exit\" to exit the program.")
-
-			conversationState.Elapsed = time.Duration(0)
-			continue
-		}
-
-		if strings.HasPrefix(strings.ToLower(input), "/include") {
-			parts := strings.Fields(input)
-			if len(parts) < 3 {
-				fmt.Println("Usage: /include <file-path> <query>")
+		if strings.HasPrefix(strings.ToLower(input), "/") {
+			if handleSlashCommand(&input, cs, &selectedModel, validModels) {
 				continue
 			}
-
-			filePath := parts[1]
-			fileContent, err := os.ReadFile(filePath)
-			if err != nil {
-				fmt.Printf("Error reading file %s: %v\n", filePath, err)
-				continue
-			}
-
-			query := strings.Join(parts[2:], " ")
-
-			query = strings.TrimSpace(query)
-			input = fmt.Sprintf("%s\n--- INPUT FILE START ---\n%s\n--- INPUT FILE END ---", query, string(fileContent))
 		}
 
 		responseRequest.Input = input
 
 		start := time.Now()
 
+		stopSpinner := make(chan struct{})
+		startSpinner(stopSpinner)
+
 		response, err := client.CreateResponse(responseRequest)
+
+		close(stopSpinner)
+		fmt.Print("\r")
+
 		if err != nil {
 			log.Fatalf("Error creating response: %v", err)
 		}
 
-		fmt.Print("\033[H\033[2J")
+		// fmt.Print("\033[H\033[2J")
 
-		fmt.Println(response.Output[0].Content[0].Text)
+		var responseText string
+		for _, output := range response.Output {
+			if output.Role == "assistant" {
+				if len(output.Content) > 0 {
+					responseText = output.Content[0].Text
+					break
+				}
+			}
+		}
 
-		conversationState.UpdateState(response, time.Since(start))
+		if responseText != "" {
+			fmt.Println(responseText)
+		} else {
+			fmt.Println("Error: no \"role\": \"assistant\" response object found.")
+		}
+
+		cs.UpdateState(response, time.Since(start))
 	}
+
+	// do cleanup if necessary
 }
