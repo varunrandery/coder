@@ -55,9 +55,38 @@ func main() {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
+	var completer = readline.NewPrefixCompleter(
+		readline.PcItem("/include",
+			readline.PcItemDynamic(listFiles("./")),
+		),
+		readline.PcItem("/write",
+			readline.PcItemDynamic(listFiles("./")),
+			readline.PcItem("-code",
+				readline.PcItemDynamic(listFiles("./")),
+			),
+		),
+		readline.PcItem("/model",
+			readline.PcItem("info"),
+			readline.PcItem("switch",
+				readline.PcItemDynamic(func(line string) []string {
+					var models []string
+					for modelName := range validModels {
+						models = append(models, modelName)
+					}
+					return models
+				}),
+			),
+		),
+		readline.PcItem("/new"),
+		readline.PcItem("/session"),
+		readline.PcItem("/help"),
+		readline.PcItem("/exit"),
+	)
+
 	rl, err := readline.NewEx(&readline.Config{
-		Prompt:      "> ",
-		HistoryFile: "/tmp/coder_history",
+		Prompt:       "> ",
+		HistoryFile:  "/tmp/coder_history",
+		AutoComplete: completer,
 	})
 	if err != nil {
 		log.Fatalf("Error creating readline: %v", err)
@@ -99,6 +128,7 @@ func main() {
 
 		if strings.HasPrefix(strings.ToLower(input), "/") {
 			if handleSlashCommand(&input, cs, &selectedModel, validModels) {
+				cs.Elapsed = time.Duration(0)
 				continue
 			}
 		}
@@ -133,11 +163,16 @@ func main() {
 
 		if responseText != "" {
 			fmt.Println(responseText)
+			language, code := extractCodeBlock(responseText)
+			if language != "" && code != "" {
+				lines := len(strings.Split(code, "\n"))
+				fmt.Printf("\n\u2728 Code block detected: Language=%s, Lines=%d. Use /write -code <file-path> to write to file.\n", language, lines)
+				// fmt.Printf("\n%s\n", code)
+			}
+			cs.UpdateState(response, responseText, time.Since(start))
 		} else {
 			fmt.Println("Error: no \"role\": \"assistant\" response object found.")
 		}
-
-		cs.UpdateState(response, time.Since(start))
 	}
 
 	// do cleanup if necessary

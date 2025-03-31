@@ -42,6 +42,7 @@ type ResponseBody struct {
 
 type ConversationState struct {
 	PreviousID        string
+	PreviousResponse  string
 	InputTokens       int
 	OutputTokens      int
 	TotalInputTokens  int

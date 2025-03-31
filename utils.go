@@ -9,8 +9,9 @@ import (
 	"time"
 )
 
-func (cs *ConversationState) UpdateState(response ResponseBody, elapsed time.Duration) {
+func (cs *ConversationState) UpdateState(response ResponseBody, responseText string, elapsed time.Duration) {
 	cs.PreviousID = response.ID
+	cs.PreviousResponse = responseText
 	cs.InputTokens = response.Usage.InputTokens
 	cs.OutputTokens = response.Usage.OutputTokens
 	cs.TotalInputTokens += response.Usage.InputTokens
@@ -20,6 +21,7 @@ func (cs *ConversationState) UpdateState(response ResponseBody, elapsed time.Dur
 
 func (cs *ConversationState) ClearState() {
 	cs.PreviousID = ""
+	cs.PreviousResponse = ""
 	cs.InputTokens = 0
 	cs.OutputTokens = 0
 	cs.TotalInputTokens = 0
@@ -54,6 +56,7 @@ func handleSlashCommand(input *string, cs *ConversationState, selectedModel *Mod
 		fmt.Println("- \"/session\": view current-conversation token consumption.")
 		fmt.Println("- \"/model info\": to view current model info.")
 		fmt.Println("- \"/model switch <model-name>\" to change the current model.")
+		fmt.Println("- \"/write [-code] <file-path>\": write the previous response to a file. Use -code to write the first code block only.")
 		fmt.Println("- \"/exit\": exit the program.")
 		return true
 
@@ -82,7 +85,6 @@ func handleSlashCommand(input *string, cs *ConversationState, selectedModel *Mod
 		} else if len(parts) >= 2 && parts[1] == "switch" {
 			keys := slices.Sorted(maps.Keys(validModels))
 
-			fmt.Println("Usage: /model switch <model-name>")
 			fmt.Printf("\nAvailable models:\n%s\n", strings.Join(keys, ", "))
 
 			if len(parts) == 3 {
@@ -102,9 +104,89 @@ func handleSlashCommand(input *string, cs *ConversationState, selectedModel *Mod
 			return true
 		}
 
+	case "/write":
+		if len(parts) < 2 {
+			fmt.Println("Usage: /write [-code] <file-path>")
+			return true
+		}
+
+		var filePath string
+		writeCodeBlock := false
+
+		var language string
+		var code string
+
+		if len(parts) > 2 && parts[1] == "-code" {
+			writeCodeBlock = true
+			filePath = parts[2]
+		} else if len(parts) == 2 {
+			filePath = parts[1]
+		} else {
+			fmt.Println("Usage: /write [-code] <file-path>")
+			return true
+		}
+
+		if cs.PreviousID == "" {
+			fmt.Println("No previous response to write.")
+			return true
+		}
+
+		var contentToWrite string
+		if writeCodeBlock {
+			language, code = extractCodeBlock(cs.PreviousResponse)
+			if language == "" || code == "" {
+				fmt.Println("No code block found in the previous response.")
+				return true
+			}
+			contentToWrite = code
+		} else {
+			contentToWrite = cs.PreviousResponse
+		}
+
+		err := os.WriteFile(filePath, []byte(contentToWrite), 0644)
+		if err != nil {
+			fmt.Printf("Error writing to file %s: %v\n", filePath, err)
+			return true
+		}
+
+		if writeCodeBlock {
+			fmt.Printf("Code block written to %s\n\n", filePath)
+			fmt.Printf("Language: %s\n", language)
+			fmt.Printf("Lines: %d\n", len(strings.Split(code, "\n")))
+		} else {
+			fmt.Printf("\nResponse written to %s\n", filePath)
+		}
+
+		return true
+
 	default:
 		fmt.Printf("Unknown command: %s\n", parts[0])
 		return true
+	}
+}
+
+func extractCodeBlock(responseText string) (string, string) {
+	parts := strings.Split(responseText, "```")
+	if len(parts) < 3 {
+		return "", ""
+	}
+
+	language := strings.Split(parts[1], "\n")[0]
+	lines := strings.Split(parts[1], "\n")
+
+	code := strings.TrimSpace(strings.Join(lines[1:], "\n"))
+
+	return language, code
+}
+
+func listFiles(path string) func(string) []string {
+	return func(line string) []string {
+		names := make([]string, 0)
+		files, _ := os.ReadDir(path)
+		for _, f := range files {
+			names = append(names, f.Name())
+		}
+		return names
 	}
 }
 
