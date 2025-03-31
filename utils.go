@@ -54,8 +54,8 @@ func handleSlashCommand(input *string, cs *ConversationState, selectedModel *Mod
 		fmt.Println("- \"/new\": start a new conversation.")
 		fmt.Println("- \"/include <file-path> <prompt>\": include a file in context.")
 		fmt.Println("- \"/session\": view current-conversation token consumption.")
-		fmt.Println("- \"/model info\": to view current model info.")
-		fmt.Println("- \"/model switch <model-name>\" to change the current model.")
+		fmt.Println("- \"/model info\": view current model info.")
+		fmt.Println("- \"/model switch <model-name>\": change current model.")
 		fmt.Println("- \"/write [-code] <file-path>\": write the previous response to a file. Use -code to write the first code block only.")
 		fmt.Println("- \"/exit\": exit the program.")
 		return true

@@ -37,8 +37,8 @@ Usage:
 - "/new": start a new conversation.
 - "/include <file-path> <prompt>": include a file in context.
 - "/session": view current-conversation token consumption.
-- "/model info": to view current model info.
-- "/model switch <model-name>" to change the current model.
+- "/model info": view current model info.
+- "/model switch <model-name>": change current model.
 - "/write [-code] <file-path>": write the previous response to a file. Use -code to write the first code block only.
 - "/exit": exit the program.
 ```
